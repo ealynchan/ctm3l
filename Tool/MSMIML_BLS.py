@@ -1,17 +1,7 @@
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import torch
-import pandas as pd
-import time
-from sklearn.metrics import accuracy_score
-
 class MSMIML_BLS:
-    """
-    MSMIML_BLS_way1是BLS适应多源多示例多标签数据集的第一种方式：
-    一个视图k下，一个bag l 独立生成Z_k^l (n_l x p_1m) 和H_k^l (n_l x p_2m) ，得到A_k^l (n_l x (p_1m+p_2m) )
-    -->一个视图下，所有bag的A_k^1, A_k^2, ..., A_k^b组合成A_k (n x (p_1m+p_2m) )
-    -->所有视图的A_k, k=1,2,...,m 组合成张量A (n x (p_1m+p_2m) x m)
-    """
     def __init__(self, n_feature_maps=3, n_enhancement_groups=2,
                  feature_dim=100, enh_dim=50, reg_lambda=1e-3,
                  feature_activation='relu', enhancement_activation='tanh'):
@@ -462,83 +452,3 @@ class MSMIML_BLS:
         A = torch.sum(A_tensor, dim=0)
 
         return torch.matmul(A, self.Wout)
-
-
-#################################################### Test code ##########################################################
-"""
-dataList = ['tabel1', 'NOIZEUS', '3sources', 'rugby', 'human', 'ESC-50', 'yeast', 'plant', 'object', 'scene',
-            'PascalVOC', 'mirflickr', 'espgame', 'Azotobacter_vinelandii', 'Geobacter_sulfurreducens',
-            'Haloarcula_marismortui', 'Pyrococcus_furiosus']
-souList = [2, 4, 3, 3, 3, 4, 2, 3, 5, 5, 3, 4, 8, 2, 2, 2, 2]
-labList = [3, 7, 6, 15, 14, 8, 14, 12, 31, 33, 20, 38, 268, 340, 320, 234, 321]
-
-selectedList = ['tabel1', 'PascalVOC', 'mirflickr', '3sources', 'yeast', 'ESC-50', 'Azotobacter_vinelandii',
-                   'Geobacter_sulfurreducens', 'Haloarcula_marismortui', 'Pyrococcus_furiosus']
-bagNum = [3, 2000, 5000, 169, 2417, 2000, 407, 379, 304, 425]
-split_group = 1
-for index in range(0, 1):  #len(selectedList)
-    d = dataList.index(selectedList[index]) # 获取数据集的索引
-    datasetPath = '../datasets/'
-    # 原始的多标签数据集data
-    data = pd.read_csv(datasetPath + dataList[d] + '_1.csv')
-    samNum, labNum, souNum = data.shape[0], labList[d], souList[d]
-    dim = [samNum, bagNum[index], labNum, souNum]
-    dim_test = [samNum, bagNum[index], labNum, souNum]
-    print(dataList[d], ':', samNum, labNum, souNum)
-
-    for splitTime in range(split_group):
-        print('splitTime:', splitTime + 1)
-        attList, attList_test = [], []
-        X_train_allSource, y_train_allSource = [], []
-        X_test_allSource, y_test_allSource = [], []
-        dfs = []
-        dfs_test = []
-        for k in range(souNum):
-            train_testPath = '../datasets/train_test/'
-            train_data = pd.read_csv(train_testPath + dataList[d] + '_' + str(k) + '_train_split_' + str(splitTime + 1) + '.csv')
-            test_data = pd.read_csv(train_testPath + dataList[d] + '_' + str(k) + '_test_split_' + str(splitTime + 1) + '.csv')
-            dfs.append(train_data)
-            dfs_test.append(test_data)
-            if index <= 2:
-                X_train, y_train = np.array(train_data.iloc[:, 2:-2*labNum]), np.array(train_data.iloc[:, -2*labNum:-labNum])
-                X_test, y_test = np.array(test_data.iloc[:, 2:-2*labNum]), np.array(test_data.iloc[:, -2*labNum:-labNum])
-            else:
-                X_train, y_train = np.array(train_data.iloc[:, 2:-labNum]), np.array(train_data.iloc[:, -labNum:])
-                X_test, y_test = np.array(test_data.iloc[:, 2:-labNum]), np.array(test_data.iloc[:, -labNum:])
-            # print('X_train:', X_train.shape, 'y_train:', y_train.shape, 'X_test:', X_test.shape, 'y_test:', y_test.shape)
-            attList.append(X_train.shape[1])
-            attList_test.append(X_test.shape[1])
-            dim_test[0] = X_test.shape[0]
-            # 标准化（重要！）
-            scaler = StandardScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform(X_test)
-            X_train_allSource.append(X_train)
-            y_train_allSource.append(y_train)
-            X_test_allSource.append(X_test)
-            y_test_allSource.append(y_test)
-        dim.append(attList)
-        dim_test.append(attList_test)
-        # print('dim:', dim, 'dim_test:', dim_test)
-
-        activations = ['relu', 'tanh', 'sigmoid', 'tribas', 'gaussian']
-        act = activations[1]
-        # print(f"\n🧪 Testing activation: {act}")
-        model = MSMIML_BLS(n_feature_maps=3, n_enhancement_groups=2,
-                               feature_dim=100, enh_dim=50, reg_lambda=1e-3,
-                               feature_activation='relu', enhancement_activation=act)  # 'tanh'
-
-        start = time.time()
-        Wout, A_tensor, bag_instance_tensor = model.train(dim, dfs, y_train_allSource)
-        train_time = time.time() - start
-
-        print(f"A_tensor: {A_tensor.shape}, bag_instance_tensor: {bag_instance_tensor.shape}")
-
-        pred = model.predict(dfs_test, dim)[0].cpu().numpy()
-        # 先将 pred 转为二值预测（0/1），通过阈值（如 0.5）
-        y_pred = (pred >= 0.5).astype(int)
-        # print('pred:', pred, '\n y_test:', y_test_allSource[0])
-        acc = accuracy_score(y_test_allSource[0], y_pred)
-
-        print(f"Accuracy: {acc:.4f} | Time: {train_time:.2f}s")
-"""

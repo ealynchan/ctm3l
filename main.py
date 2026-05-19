@@ -1,7 +1,7 @@
 # This is for CTM3L
 import math
 import pandas as pd
-from Tool import metrics_MLL, MSMIML_BLS, MSMIML_PCA
+from Tool import metrics_MLL, MSMIML_BLS
 import numpy as np
 import time
 from Tool import t_SVD
@@ -694,55 +694,6 @@ class MSMIMLmodel:
 
         return C
 
-    # 更新张量G根据公式(38)############################################
-    # def updateG(self, R2, U3, R3, OList, muList):
-    #     R3 = self.to_device(R3)
-    #     O3 = self.to_device(OList[2])
-    #     mu3 = muList[2]
-    #     eps = 1e-12
-    #
-    #     m, n, q = R2.shape
-    #     N = n * q
-    #
-    #     # --- Step 1:
-    #     device = U3.device
-    #
-    #     # --- Step 2: Compute u = B_(3) vec(Z)
-    #     R2_mat = R2.reshape(m, N)  # B_(3) ∈ R^{m × N}
-    #     R3_vec = R3.reshape(N)  # vec(Z)
-    #     u = R2_mat @ R3_vec  # (m,)
-    #
-    #     # --- Step 3: Construct RHS matrix R = μ2*W + O2 + 2β*(u 1^T)
-    #     ones = torch.ones(m, dtype=u.dtype, device=device)
-    #     R = mu3 * U3 + O3 + 2 * self.lbd1 * torch.outer(u, ones)  # (m, m)
-    #
-    #     # --- Step 4: Compute K = B_(3) B_(3)^T ∈ R^{m×m}
-    #     K = R2_mat @ R2_mat.T  # (m, m), cost O(m^2 * N) = O(m^2 n q)
-    #     # --- Step 5: Solve for s in (μ2 I + 2β m K) s = R 1
-    #     r = R @ ones  # (m,)
-    #     Im = torch.eye(m, device=device)
-    #     M = mu3 * Im + 2 * self.lbd1 * m * K  # (m, m)
-    #     # Add small regularization for numerical stability
-    #     M += eps * Im
-    #     s = torch.linalg.solve(M, r)  # shape: (m,), cost O(m^3)
-    #
-    #     # --- Step 6: Recover C = (1/μ2) * (R - 2β K s 1^T)
-    #     ks = K @ s  # (m,)
-    #     G = (R - 2 * self.lbd1 * torch.outer(ks, ones)) / mu3  # (m, m)
-    #
-    #     G_min = G.min()
-    #     G_max = G.max()
-    #     # 避免除零（如果 W_max == W_min）
-    #     denom = G_max - G_min
-    #     if denom.abs() < 1e-12:
-    #         G_normalized = torch.zeros_like(G)
-    #     else:
-    #         G_normalized = (G - G_min) / denom
-    #
-    #     # Step 4: 截断非正值为 0
-    #     G_normalized = torch.clamp(G_normalized, min=0.0)
-    #
-    #     return G_normalized
     def updateG(self, R2, U3, R3, OList, muList):
         R3 = self.to_device(R3)
         O3 = self.to_device(OList[2])
@@ -1375,9 +1326,7 @@ for d in range(0, len(dataList)):  # len(selectedList)
     # 获取唯一的包ID
     unique_train_bags = train_data0[train_data0.columns[0]].unique()
     unique_test_bags = test_data0[test_data0.columns[0]].unique()
-    # # 随机选择包ID
-    # selected_train_bags = unique_train_bags[:min(partBagNum, len(unique_train_bags))]
-    # selected_test_bags = unique_test_bags[:min(partBagNum, len(unique_test_bags))]
+
     # 按选中的包过滤数据
     train_data0 = train_data0[train_data0[train_data0.columns[0]].isin(unique_train_bags)]
     test_data0 = test_data0[test_data0[test_data0.columns[0]].isin(unique_test_bags)]
@@ -1470,6 +1419,6 @@ for d in range(0, len(dataList)):  # len(selectedList)
         scores_ins = metrics_MLL.mll_metrics(y_test_ins, y_pred_ins, y_score_ins, y_pred_ins_view)
         scoresList.append(scores_bag)
         scoresList_ins.append(scores_ins)
-        print(dataList[d], '   score:  ap, f1, auc, rl, hl, cs, oe, cv')
+        print(dataList[d], '   score:  ap, auc, rl, hl')
         print(dataList[d], 'score_bag:', scores_bag, ' splitTime:', splitTime + 1)
         print(dataList[d], 'score_ins:', scores_ins, ' splitTime:', splitTime + 1)
